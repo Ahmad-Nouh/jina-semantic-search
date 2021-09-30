@@ -6,27 +6,37 @@ from jina import Document, DocumentArray
 from config import PathConfig
 
 
-def rolling_update(nr_docs, dump_path):
-    with TimeContext(f'### rolling update {nr_docs} docs'):
-        app.search_flow.rolling_update(pod_name='query_searcher', dump_path=dump_path)
+def rolling_update(dump_path):
+    """
+    :param dump_path: the path you want to roll-update from
+    :return: None
+    """
+    app.search_flow.rolling_update(pod_name='query_searcher', dump_path=dump_path)
 
 
-def dump_docs(nr_docs, dump_path):
-    with TimeContext(f'### dumping {nr_docs} docs'):
-        dump_results = app.index_flow.post(
-            on='/dump',
-            target_peapod='storage_indexer',
-            parameters={
-                'dump_path': dump_path,
-                'shards': 1,
-                'timeout': -1,
-            },
-            return_results=True
-        )
-        print(f'dump_results = {dump_results}')
+def dump_docs(dump_path: str):
+    """
+    :param dump_path: the path you want to dump the data in
+    :return: None
+    """
+    dump_results = app.index_flow.post(
+        on='/dump',
+        target_peapod='storage_indexer',
+        parameters={
+            'dump_path': dump_path,
+            'shards': 1,
+            'timeout': -1,
+        },
+        return_results=True
+    )
 
 
-def index_docs(docs, nr_docs):
+def index_docs(docs: list):
+    """
+    :param docs: list of documents you want to index
+    :return: None
+    """
+    nr_docs = len(docs)
     with TimeContext(f'### indexing {nr_docs} docs'):
         index_batch = DocumentArray([
             Document(id=doc['id'], text=doc['title_t_bi'], tags=doc)
@@ -38,22 +48,24 @@ def index_docs(docs, nr_docs):
             inputs=index_batch,
             return_results=True
         )
-        print(f'index_results = {index_results}')
 
 
 def index_documents():
+    """
+    indexing documents handler
+    :return: dict
+    """
     req_body = request.get_json(force=True)
     docs = req_body.get('docs')
-    nr_docs = len(docs)
 
     dump_path = os.path.join(PathConfig.TEMP_DIR, 'dump_' + str(app.dump_count))
     os.makedirs(dump_path, exist_ok=True)
     try:
-        index_docs(docs, nr_docs)
+        index_docs(docs)
         print('finish indexing')
-        dump_docs(nr_docs, dump_path)
+        dump_docs(dump_path)
         print('finish dumping')
-        rolling_update(nr_docs, dump_path)
+        rolling_update(dump_path)
     except Exception as e:
         return {
             'error': str(e)
@@ -66,6 +78,11 @@ def index_documents():
 
 
 def search_documents():
+    """
+    searching documents handler.
+    it returns dictionary that has "matches" key which contains list of documents id
+    :return: dict
+    """
     req_body = request.get_json(force=True)
     search_query = req_body.get('query')
 
@@ -73,7 +90,6 @@ def search_documents():
         inputs=Document(text=search_query),
         return_results=True
     )
-    print(f'matches = {[match for match in results[0].docs[0].matches]}')
 
     res = {
         'matches': [match.id for match in results[0].docs[0].matches]

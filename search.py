@@ -1,3 +1,4 @@
+import sys
 import requests
 
 API_URL = 'http://localhost:8000/search'
@@ -8,7 +9,7 @@ def search_docs(q):
     return r
 
 
-query = 'البنك الدولي'
+query = sys.argv[1]
 results = search_docs(query)
 
 print(results.json())
